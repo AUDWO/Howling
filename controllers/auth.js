@@ -36,7 +36,8 @@ exports.login = (req, res, next) => {
       return next(authError);
     }
     if (!user) {
-      res.send(info.message);
+      // res.send(info.message);
+      return res.send("not exist");
       //유저 정보가 옳바르지 않다.
     }
     return req.login(user, (loginError) => {
@@ -49,7 +50,7 @@ exports.login = (req, res, next) => {
   })(req, res, next);
 };
 
-exports.logout = (req, res, next) => {
+exports.logout = (req, res) => {
   req.logout(() => {
     res.sendStatus(200);
   });

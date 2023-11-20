@@ -6,6 +6,7 @@ const {
   deleteStoryComment,
   deleteDiaryComment,
   unReactStory,
+  unReactDiary,
 } = require("../controllers/delete");
 
 const DiaryComment = require("../models/diaryComment");
@@ -17,6 +18,7 @@ router.delete("/post-comment/:commentId", deletePostComment);
 //diary
 router.delete("/diary/:diaryId", deleteDiary);
 router.delete("/diary-comment/:commentId", deleteDiaryComment);
+router.delete("/diary-react/:diaryId", unReactDiary);
 
 //story
 router.delete("/story-react/:storyId", unReactStory);

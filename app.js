@@ -8,17 +8,32 @@ const dotenv = require("dotenv");
 const passport = require("passport");
 const app = express();
 const passportConfig = require("./passport");
+const redis = require("redis");
+const RedisStore = require("connect-redis").default;
 
 dotenv.config();
-//const pageRouter = require("./routes/page");
-const authRouter = require("./routes/auth");
+
+const redisClient = redis.createClient({
+  url: `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`,
+  password: process.env.REDIS_PASSWORD,
+  legacyMode: false,
+});
+redisClient.connect().catch(console.error);
+
 const pageRouter = require("./routes/page");
+const authRouter = require("./routes/auth");
 const postRouter = require("./routes/post");
 const userRouter = require("./routes/user");
+const commentRouter = require("./routes/comment");
+const updateRouter = require("./routes/update");
+const deleteRouter = require("./routes/delete");
+const helmet = require("helmet");
+const hpp = require("hpp");
 const { sequelize } = require("./models");
+const logger = require("./logger");
 
 passportConfig();
-app.set("port", process.env.PORT || 8090);
+app.set("port", process.env.PORT || 8080);
 
 sequelize
   .sync({ force: false })
@@ -29,35 +44,56 @@ sequelize
     console.error(err);
   });
 
+if (process.env.NODE_ENV === "production") {
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: false,
+    })
+  );
+  app.use(hpp());
+  app.use(morgan("combined"));
+} else {
+  app.use(morgan("dev"));
+}
 app.use(morgan("dev"));
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 var cors = require("cors");
+const { deepStrictEqual } = require("assert");
 app.use(cors());
 app.use("/img", express.static(path.join(__dirname, "uploads")));
-app.use(express.urlencoded({ extended: false }));
+app.use("/profileImg", express.static(path.join(__dirname, "profileImg")));
+app.use(express.json());
+app.use(express.urlencoded({ limit: "10mb", extended: false }));
 app.use(cookieParser(process.env.COOKIE_SECRET));
-app.use(
-  session({
-    resave: false,
-    saveUninitialized: false,
-    secret: process.env.COOKIE_SECRET,
-    cookie: {
-      httpOnly: true,
-      secure: false,
-    },
-  })
-);
+const sessionOption = {
+  resave: false,
+  saveUninitialized: false,
+  secret: process.env.COOKIE_SECRET,
+  cookie: {
+    httpOnly: true,
+    secure: false,
+  },
+
+  store: new RedisStore({ client: redisClient }),
+};
+if (process.env.NODE_ENV === "production") {
+  sessionOption.proxy = true;
+}
+app.use(session(sessionOption));
 
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.use(express.json());
 //const cors = require("cors");
 //app.use(cors());
 
+/*
 app.listen(8005, () => {
   console.log("Listening on 8005");
-});
+});*/
+
 app.use(express.static(path.join(__dirname, "prototype-client/build")));
 
 app.get("/", (req, res) => {
@@ -68,6 +104,9 @@ app.use("/page", pageRouter);
 app.use("/auth", authRouter);
 app.use("/post", postRouter);
 app.use("/user", userRouter);
+app.use("/comment", commentRouter);
+app.use("/update", updateRouter);
+app.use("/delete", deleteRouter);
 
 //react에서 react-router-dom으로 다룰 수 있게
 app.get("*", function (req, res) {
@@ -78,26 +117,15 @@ app.get("*", function (req, res) {
 app.use((req, res, next) => {
   const error = new Error(`${(req, method)} ${req.url} 라우터가 없습니다.`);
   error.status = 404;
+  logger.info("hello");
+  logger.error(error.message);
   next(error);
 });
 
 app.use((err, req, res, next) => {
-  //res.loacls.message = err.message;
+  res.loacls.message = err.message;
   res.locals.erorr = process.env.NODE_ENV !== "production" ? err : {};
   res.status(err.status || 500);
-  res.send("tlqkf wrkxsp");
 });
 
-[
-  {
-    id: 1,
-    email: "kmjstj3@naver.com",
-    nickname: "audwo",
-    password: "$2b$12$2G6eQv2SO1CJRTa8D4UZyOVLUAQk7miXAxQoYKdzTL73h9teVG1Cu",
-    provider: "local",
-    snsId: null,
-    createdAt: "2023-09-14T14:12:34.000Z",
-    updatedAt: "2023-09-14T14:12:34.000Z",
-    deletedAt: null,
-  },
-];
+module.exports = app;
